@@ -1,3 +1,4 @@
+# ui.py
 import os
 import time
 import random
@@ -6,12 +7,13 @@ from tkinter import ttk, scrolledtext
 from PIL import Image, ImageTk
 
 import config
-from environment import count_gift, result
+from environment import count_gift, result, copy_matrix
 from algorithms.utils import Node, BeliefNode, bs_goal_test, bs_result
 from algorithms.uninformed import breadth_first_search_2, depth_first_search_2, uniform_cost_search
 from algorithms.informed import greedy_search, a_star_search, ida_star_search
 from algorithms.local import simple_hill_climbing, local_beam_search, simulated_annealing
 from algorithms.complex_env import sensorless_bfs, partial_obs_bfs, and_or_graph_search
+from algorithms.csp import CSPMapGenerator
 
 class FrozenLakeGUI:
     def __init__(self, root):
@@ -37,9 +39,17 @@ class FrozenLakeGUI:
 
         self.initial_matrix = []
         self.current_matrix = []
+        self.initial_belief_states = []
+        self.current_belief_states = []
+        self.active_view = "SINGLE" 
+        
         self.is_running = False
         self.canvas_dim = config.CANVAS_DIM
         self.size_var = tk.StringVar(value=config.DEFAULT_MAP_SIZE)
+        
+        # Biến chọn loại Map Generator
+        self.gen_mode_var = tk.StringVar(value="Random")
+        
         self.image_cache = {}
 
         self.setup_ui()
@@ -74,11 +84,17 @@ class FrozenLakeGUI:
         map_setting_frame = tk.Frame(self.control_frame, bg="#F5F5F5")
         map_setting_frame.pack(fill=tk.X, pady=(0, 5))
         
-        self.size_combo = ttk.Combobox(map_setting_frame, textvariable=self.size_var, values=["3x3", "4x4", "5x5", "6x6"], state="readonly", width=6)
+        self.size_combo = ttk.Combobox(map_setting_frame, textvariable=self.size_var, values=["3x3", "4x4", "5x5", "6x6"], state="readonly", width=4)
         self.size_combo.pack(side=tk.LEFT, padx=(0, 5))
         self.size_combo.bind("<<ComboboxSelected>>", lambda event: self.generate_map())
         
-        ttk.Button(map_setting_frame, text="Generate Map", command=self.generate_map, width=12).pack(side=tk.LEFT)
+        # Thêm Combobox chọn thuật toán sinh bản đồ CSP
+        self.mode_combo = ttk.Combobox(map_setting_frame, textvariable=self.gen_mode_var, values=["Random", "CSP: Backtracking", "CSP: Forward Checking", "CSP: Min-Conflicts"], state="readonly", width=18)
+        self.mode_combo.pack(side=tk.LEFT, padx=(0, 5))
+        self.mode_combo.bind("<<ComboboxSelected>>", lambda event: self.generate_map())
+        
+        ttk.Button(map_setting_frame, text="Generate", command=self.generate_map, width=8).pack(side=tk.LEFT)
+        ttk.Button(map_setting_frame, text="Reset", command=self.reset_map, width=6).pack(side=tk.LEFT, padx=(5, 0))
 
         ttk.Separator(self.control_frame, orient='horizontal').pack(fill='x', pady=8)
 
@@ -102,10 +118,10 @@ class FrozenLakeGUI:
         ttk.Button(col1, text="A* Search", command=lambda: self.run_algo("A*"), width=16).pack(pady=1)
         ttk.Button(col1, text="IDA* Search", command=lambda: self.run_algo("IDA*"), width=16).pack(pady=1)
 
-        ttk.Label(col2, text="Local Search", font=('Segoe UI', 10, 'bold')).pack(anchor="w", pady=(0, 5))
-        ttk.Button(col2, text="Simple HC", command=lambda: self.run_algo("SHC"), width=16).pack(pady=1)
-        ttk.Button(col2, text="Local Beam Search", command=lambda: self.run_algo("LBS"), width=16).pack(pady=1)
-        ttk.Button(col2, text="Simulated Annealing", command=lambda: self.run_algo("SA"), width=16).pack(pady=1)
+        ttk.Label(col1, text="Local Search", font=('Segoe UI', 10, 'bold')).pack(anchor="w", pady=(0, 5))
+        ttk.Button(col1, text="Simple HC", command=lambda: self.run_algo("SHC"), width=16).pack(pady=1)
+        ttk.Button(col1, text="Local Beam Search", command=lambda: self.run_algo("LBS"), width=16).pack(pady=1)
+        ttk.Button(col1, text="Simulated Annealing", command=lambda: self.run_algo("SA"), width=16).pack(pady=1)
 
         ttk.Separator(col2, orient='horizontal').pack(fill='x', pady=5)
         ttk.Label(col2, text="Sensorless Env", font=('Segoe UI', 10, 'bold')).pack(anchor="w", pady=(0, 2))
@@ -132,14 +148,16 @@ class FrozenLakeGUI:
         self.log_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(20, 0))
         
         ttk.Label(self.log_frame, text="Execution Log", font=('Segoe UI', 10, 'bold')).pack(anchor="w", pady=(0, 5))
-        self.log_text = scrolledtext.ScrolledText(self.log_frame, width=30, font=("Consolas", 9), bd=1, relief="solid")
+        self.log_text = scrolledtext.ScrolledText(self.log_frame, width=22, font=("Consolas", 9), bd=1, relief="solid")
         self.log_text.pack(fill=tk.BOTH, expand=True)
 
     def generate_map(self):
         if self.is_running: return
+        self.active_view = "SINGLE"
         
         size_str = self.size_var.get()
         size = int(size_str.split('x')[0])
+        mode = self.gen_mode_var.get()
         
         obstacle_mapping = {3: 2, 4: 3, 5: 6, 6: 10}
         num_obstacles = obstacle_mapping.get(size, 8)
@@ -147,28 +165,79 @@ class FrozenLakeGUI:
         max_gift_mapping = {3: 4, 4: 6, 5: 8, 6: 12}
         num_gift = random.randint(1, max_gift_mapping.get(size, 6))
         
-        self.initial_matrix = [[0 for _ in range(size)] for _ in range(size)]
-        self.initial_matrix[random.randint(0, size-1)][random.randint(0, size-1)] = 2
-        
-        obs_placed = 0
-        while obs_placed < num_obstacles:
-            rx, ry = random.randint(0, size-1), random.randint(0, size-1)
-            if self.initial_matrix[rx][ry] == 0:
-                self.initial_matrix[rx][ry] = 3
-                obs_placed += 1
+        self.log_text.delete(1.0, tk.END)
+        self.log_text.insert(tk.END, f"Generating map via {mode}...\n")
+        self.root.update()
+
+        # LOGIC TẠO BẢN ĐỒ CSP HOẶC RANDOM
+        if mode == "Random":
+            self.initial_matrix = [[0 for _ in range(size)] for _ in range(size)]
+            self.initial_matrix[random.randint(0, size-1)][random.randint(0, size-1)] = 2
+            
+            obs_placed = 0
+            while obs_placed < num_obstacles:
+                rx, ry = random.randint(0, size-1), random.randint(0, size-1)
+                if self.initial_matrix[rx][ry] == 0:
+                    self.initial_matrix[rx][ry] = 3
+                    obs_placed += 1
+                    
+            gift_placed = 0
+            while gift_placed < num_gift:
+                rx, ry = random.randint(0, size-1), random.randint(0, size-1)
+                if self.initial_matrix[rx][ry] == 0:
+                    self.initial_matrix[rx][ry] = 1
+                    gift_placed += 1
+        else:
+            csp = CSPMapGenerator(size, num_gift, num_obstacles)
+            assignment = None
+            
+            if mode == "CSP: Backtracking":
+                assignment = csp.backtracking()
+            elif mode == "CSP: Forward Checking":
+                assignment = csp.forward_checking()
+            elif mode == "CSP: Min-Conflicts":
+                assignment = csp.min_conflicts()
                 
-        gift_placed = 0
-        while gift_placed < num_gift:
-            rx, ry = random.randint(0, size-1), random.randint(0, size-1)
-            if self.initial_matrix[rx][ry] == 0:
-                self.initial_matrix[rx][ry] = 1
-                gift_placed += 1
+            if assignment:
+                self.initial_matrix = [[0]*size for _ in range(size)]
+                for var, pos in assignment.items():
+                    if var == 'Santa': self.initial_matrix[pos[0]][pos[1]] = 2
+                    elif var.startswith('Gift'): self.initial_matrix[pos[0]][pos[1]] = 1
+                    elif var.startswith('Obs'): self.initial_matrix[pos[0]][pos[1]] = 3
+                self.log_text.insert(tk.END, "[SUCCESS] CSP Found valid map.\n")
+            else:
+                # Nếu CSP chạm giới hạn (Timeout), fallback sang Random
+                self.log_text.insert(tk.END, "[FAIL] CSP Timeout. Fallback to Random.\n")
+                self.gen_mode_var.set("Random")
+                self.generate_map()
+                return
                 
         self.current_matrix = [row[:] for row in self.initial_matrix]
         self.draw_grid(self.current_matrix)
+        self.log_text.insert(tk.END, f"Ready with {num_gift} gifts.\n")
+        self.update_solution_text("")
+
+    def reset_map(self):
+        if self.is_running: return
         
-        self.log_text.delete(1.0, tk.END)
-        self.log_text.insert(tk.END, f"Generated map with {num_gift} gifts.\nReady for search.\n")
+        if self.active_view == "SINGLE" and self.initial_matrix:
+            self.current_matrix = [row[:] for row in self.initial_matrix]
+            self.draw_grid(self.current_matrix)
+            self.log_text.delete(1.0, tk.END)
+            self.log_text.insert(tk.END, "Map reset to Initial State.\n")
+            
+        elif self.active_view == "DUAL" and self.initial_belief_states:
+            self.current_belief_states = [copy_matrix(s) for s in self.initial_belief_states]
+            self.draw_dual_grid(self.current_belief_states[0], self.current_belief_states[1])
+            self.log_text.delete(1.0, tk.END)
+            self.log_text.insert(tk.END, "Belief States reset.\n")
+            
+        elif self.active_view == "PARTIAL" and self.initial_belief_states:
+            self.current_belief_states = [copy_matrix(s) for s in self.initial_belief_states]
+            self.draw_dual_grid(self.current_belief_states[0], self.current_belief_states[1], getattr(self, 'known_coords', None))
+            self.log_text.delete(1.0, tk.END)
+            self.log_text.insert(tk.END, "Partial Belief States reset.\n")
+            
         self.update_solution_text("")
 
     def draw_grid(self, matrix):
@@ -316,10 +385,13 @@ class FrozenLakeGUI:
 
     def generate_belief_states(self):
         if self.is_running: return
+        self.active_view = "DUAL"
         size = int(self.size_var.get().split('x')[0])
         state1 = self.generate_random_single_state(size)
         state2 = self.generate_random_single_state(size)
-        self.current_belief_states = [state1, state2]
+        
+        self.initial_belief_states = [copy_matrix(state1), copy_matrix(state2)]
+        self.current_belief_states = [copy_matrix(state1), copy_matrix(state2)]
         
         self.draw_dual_grid(state1, state2)
         self.log_text.delete(1.0, tk.END)
@@ -328,6 +400,7 @@ class FrozenLakeGUI:
         
     def generate_partial_belief_states(self):
         if self.is_running: return
+        self.active_view = "PARTIAL"
         size = int(self.size_var.get().split('x')[0])
         num_known = max(1, (size * size) // 3)
         state1 = self.generate_random_single_state(size)
@@ -361,7 +434,9 @@ class FrozenLakeGUI:
                 empty_unknown.remove((rx, ry))
             break
             
-        self.current_belief_states = [state1, state2]
+        self.initial_belief_states = [copy_matrix(state1), copy_matrix(state2)]
+        self.current_belief_states = [copy_matrix(state1), copy_matrix(state2)]
+        
         self.draw_dual_grid(state1, state2, self.known_coords)
         self.log_text.delete(1.0, tk.END)
         self.log_text.insert(tk.END, "Generated Partial Obs BS.\n")
@@ -369,10 +444,14 @@ class FrozenLakeGUI:
 
     def run_sensorless_algo(self):
         if self.is_running: return
-        if not hasattr(self, 'current_belief_states'): self.generate_belief_states()
+        if not hasattr(self, 'current_belief_states') or not self.current_belief_states: 
+            self.generate_belief_states()
             
         self.is_running = True
         BeliefNode.reset_counter()
+        
+        self.current_belief_states = [copy_matrix(s) for s in self.initial_belief_states]
+        self.draw_dual_grid(self.current_belief_states[0], self.current_belief_states[1])
         
         self.log_text.delete(1.0, tk.END)
         self.log_text.insert(tk.END, "[Sensorless BFS] Running...\n")
@@ -395,11 +474,14 @@ class FrozenLakeGUI:
         
     def run_partial_obs_algo(self):
         if self.is_running: return
-        if not hasattr(self, 'current_belief_states') or not hasattr(self, 'known_coords'):
+        if not hasattr(self, 'current_belief_states') or not hasattr(self, 'known_coords') or not self.current_belief_states:
             self.generate_partial_belief_states()
             
         self.is_running = True
         BeliefNode.reset_counter()
+        
+        self.current_belief_states = [copy_matrix(s) for s in self.initial_belief_states]
+        self.draw_dual_grid(self.current_belief_states[0], self.current_belief_states[1], self.known_coords)
         
         self.log_text.delete(1.0, tk.END)
         self.log_text.insert(tk.END, "[Partial Obs BFS] Running...\n")
@@ -466,7 +548,12 @@ class FrozenLakeGUI:
             
             states = bs_result(states, action)
             self.current_belief_states = states
-            self.draw_dual_grid(states[0], states[1])
+            
+            if self.active_view == "PARTIAL":
+                self.draw_dual_grid(states[0], states[1], getattr(self, 'known_coords', None))
+            else:
+                self.draw_dual_grid(states[0], states[1])
+                
             self.root.update()
             time.sleep(config.BS_ANIMATION_SPEED)
             

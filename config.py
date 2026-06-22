@@ -1,4 +1,4 @@
-CANVAS_DIM = 600           # Kích thước vùng vẽ Canvas
+CANVAS_DIM = 750           # Kích thước vùng vẽ Canvas
 DEFAULT_MAP_SIZE = "6x6"   # Kích thước lưới mặc định
 
 # Cài đặt mô phỏng thuật toán
