@@ -6,7 +6,7 @@ from tkinter import ttk, scrolledtext
 from PIL import Image, ImageTk
 
 import config
-from environment import count_dust, result
+from environment import count_gift, result
 from algorithms.utils import Node, BeliefNode, bs_goal_test, bs_result
 from algorithms.uninformed import breadth_first_search_2, depth_first_search_2, uniform_cost_search
 from algorithms.informed import greedy_search, a_star_search, ida_star_search
@@ -144,8 +144,8 @@ class FrozenLakeGUI:
         obstacle_mapping = {3: 2, 4: 3, 5: 6, 6: 10}
         num_obstacles = obstacle_mapping.get(size, 8)
         
-        max_dust_mapping = {3: 4, 4: 6, 5: 8, 6: 12}
-        num_dust = random.randint(1, max_dust_mapping.get(size, 6))
+        max_gift_mapping = {3: 4, 4: 6, 5: 8, 6: 12}
+        num_gift = random.randint(1, max_gift_mapping.get(size, 6))
         
         self.initial_matrix = [[0 for _ in range(size)] for _ in range(size)]
         self.initial_matrix[random.randint(0, size-1)][random.randint(0, size-1)] = 2
@@ -157,18 +157,18 @@ class FrozenLakeGUI:
                 self.initial_matrix[rx][ry] = 3
                 obs_placed += 1
                 
-        dust_placed = 0
-        while dust_placed < num_dust:
+        gift_placed = 0
+        while gift_placed < num_gift:
             rx, ry = random.randint(0, size-1), random.randint(0, size-1)
             if self.initial_matrix[rx][ry] == 0:
                 self.initial_matrix[rx][ry] = 1
-                dust_placed += 1
+                gift_placed += 1
                 
         self.current_matrix = [row[:] for row in self.initial_matrix]
         self.draw_grid(self.current_matrix)
         
         self.log_text.delete(1.0, tk.END)
-        self.log_text.insert(tk.END, f"Generated map with {num_dust} gifts.\nReady for search.\n")
+        self.log_text.insert(tk.END, f"Generated map with {num_gift} gifts.\nReady for search.\n")
         self.update_solution_text("")
 
     def draw_grid(self, matrix):
@@ -277,7 +277,7 @@ class FrozenLakeGUI:
             self.update_solution_text("Bị giới hạn (Cutoff)")
             self.log_text.insert(tk.END, "Algorithm stopped (Cutoff)\n")
         elif path is None or len(path) == 0:
-            if count_dust(self.current_matrix) == 0:
+            if count_gift(self.current_matrix) == 0:
                 self.update_solution_text("Bản đồ đã sạch sẽ.")
             else:
                 self.update_solution_text("Không tìm thấy solution")
@@ -337,14 +337,14 @@ class FrozenLakeGUI:
         
         while True:
             state2 = [[0 for _ in range(size)] for _ in range(size)]
-            robot_in_known = False
+            santa_in_known = False
             for (x, y) in self.known_coords:
                 state2[x][y] = state1[x][y]
-                if state2[x][y] == 2: robot_in_known = True
+                if state2[x][y] == 2: santa_in_known = True
                     
             unknown_coords = [c for c in all_coords if c not in self.known_coords]
             
-            if not robot_in_known:
+            if not santa_in_known:
                 if not unknown_coords: continue 
                 rx, ry = random.choice(unknown_coords)
                 state2[rx][ry] = 2

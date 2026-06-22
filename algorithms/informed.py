@@ -1,11 +1,11 @@
 import heapq
 from config import MAX_ITERATIONS
-from environment import actions, goal_test, count_dust, heuristic_cost
+from environment import actions, goal_test, count_gift, heuristic_cost
 from .utils import Node, child_node, solution
 
 def greedy_search(initial_state):
     node = Node(initial_state)
-    node.cost = count_dust(node.state) 
+    node.cost = count_gift(node.state) 
     if goal_test(node.state): return solution(node)
 
     frontier = []
@@ -20,7 +20,7 @@ def greedy_search(initial_state):
 
         for action in actions(node.state):
             child = child_node(node, action)
-            child.cost = count_dust(child.state)
+            child.cost = count_gift(child.state)
 
             in_reached = any(s == child.state for s in reached)
             in_frontier = any(f_node.state == child.state for _, _, f_node in frontier)
@@ -31,7 +31,7 @@ def greedy_search(initial_state):
 
 def a_star_search(initial_state):
     node = Node(initial_state)
-    node.g = count_dust(node.state)
+    node.g = count_gift(node.state)
     node.h = heuristic_cost(node.state)
     node.cost = node.g + node.h 
     
@@ -49,7 +49,7 @@ def a_star_search(initial_state):
 
         for action in actions(node.state):
             child = child_node(node, action)
-            child.g = node.g + count_dust(child.state)
+            child.g = node.g + count_gift(child.state)
             child.h = heuristic_cost(child.state)
             child.cost = child.g + child.h
 
@@ -69,7 +69,7 @@ def a_star_search(initial_state):
 
 def bounded_a_star_search(initial_state, threshold_I):
     node = Node(initial_state)
-    node.g = count_dust(node.state)
+    node.g = count_gift(node.state)
     node.h = heuristic_cost(node.state)
     node.cost = node.g + node.h 
     
@@ -89,7 +89,7 @@ def bounded_a_star_search(initial_state, threshold_I):
 
         for action in actions(node.state):
             child = child_node(node, action)
-            child.g = node.g + count_dust(child.state)
+            child.g = node.g + count_gift(child.state)
             child.h = heuristic_cost(child.state)
             child.cost = child.g + child.h
 
@@ -114,7 +114,7 @@ def bounded_a_star_search(initial_state, threshold_I):
     return ("CUTOFF", next_I) if cutoff_occurred else (None, None)
 
 def ida_star_search(initial_state):
-    threshold_I = count_dust(initial_state)
+    threshold_I = count_gift(initial_state)
     for _ in range(MAX_ITERATIONS):
         Node.reset_counter()
         result_val, next_I = bounded_a_star_search(initial_state, threshold_I)

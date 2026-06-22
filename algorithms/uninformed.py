@@ -1,6 +1,6 @@
 from collections import deque
 import heapq
-from environment import actions, goal_test, count_dust
+from environment import actions, goal_test, count_gift
 from .utils import Node, child_node, solution
 
 def breadth_first_search_2(initial_state):

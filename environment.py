@@ -1,7 +1,7 @@
 def copy_matrix(matrix):
     return [row[:] for row in matrix]
 
-def find_robot(matrix):
+def find_santa(matrix):
     rows = len(matrix)
     cols = len(matrix[0])
     for i in range(rows):
@@ -17,7 +17,7 @@ def goal_test(state):
     return True
 
 def actions(state):
-    x, y = find_robot(state)
+    x, y = find_santa(state)
     move = []
     rows = len(state)
     cols = len(state[0])
@@ -30,7 +30,7 @@ def actions(state):
 
 def result(state, action):
     new_state = copy_matrix(state)
-    x, y = find_robot(new_state)
+    x, y = find_santa(new_state)
     new_state[x][y] = 0
     nx, ny = x, y
     
@@ -44,7 +44,7 @@ def result(state, action):
 
 def safe_apply_action(state, action):
     new_state = copy_matrix(state)
-    pos = find_robot(new_state)
+    pos = find_santa(new_state)
     if not pos: return new_state
     
     x, y = pos
@@ -61,36 +61,36 @@ def safe_apply_action(state, action):
         
     return new_state
 
-def count_dust(matrix):
+def count_gift(matrix):
     count = 0
     for row in matrix:
         count += row.count(1)
     return count
 
-def get_dust_positions(matrix):
-    dusts = []
+def get_gift_positions(matrix):
+    gifts = []
     for i in range(len(matrix)):
         for j in range(len(matrix[0])):
             if matrix[i][j] == 1:
-                dusts.append((i, j))
-    return dusts
+                gifts.append((i, j))
+    return gifts
 
 def heuristic_cost(state):
-    robot_pos = find_robot(state)
-    dusts = get_dust_positions(state)
+    santa_pos = find_santa(state)
+    gifts = get_gift_positions(state)
     
-    if not dusts or not robot_pos:
+    if not gifts or not santa_pos:
         return 0
         
-    rx, ry = robot_pos
+    rx, ry = santa_pos
     min_distance = float('inf')
     
-    for dx, dy in dusts:
+    for dx, dy in gifts:
         distance = abs(rx - dx) + abs(ry - dy)
         if distance < min_distance:
             min_distance = distance
             
-    return min_distance + (len(dusts) - 1)
+    return min_distance + (len(gifts) - 1)
 
 def nondeterministic_results(state, action):
     results = []
